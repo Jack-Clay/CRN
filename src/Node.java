@@ -2,9 +2,9 @@
 // Coursework 2024/2025
 //
 // Submission by
-//  YOUR_NAME_GOES_HERE
-//  YOUR_STUDENT_ID_NUMBER_GOES_HERE
-//  YOUR_EMAIL_GOES_HERE
+//  JACK CLAYTON
+//  240019186
+//  jack.clayton@city.ac.uk
 
 
 // DO NOT EDIT starts
