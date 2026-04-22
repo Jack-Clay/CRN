@@ -1,0 +1,138 @@
+Request for Comments (RFC)
+CRN: The Censorship Resistant Network
+Martin Nyx Brain and Narges Mahyar
+City, University of London
+March 2026
+Abstract
+Recently there have been increased threats to communication networks. These include
+governments attempting to ban social networks and individuals exerting control over platforms
+to impose ideological positions. There is a need for a distributed, censorship resistant
+communication network. This RFC defines a protocol that can be used to build one. CRN is a
+peer-to-peer protocol that provides both a key/value store and message relaying to protect the
+identity of users accessing information. Participants in the network are known as nodes. Each
+node stores part of the key/value store and can relay queries for other nodes. There is no
+central coordination. Nodes may join and leave at any time. As long as a node can contact at
+least one other node, it can access the network.Nodes communicate using User Datagram
+Protocol (UDP). Messages are classified as requests, responses, or information messages. This
+document specifies the required formats and behaviours.
+1. Terminology
+This document uses the terminology of RFC 2119: MUST, SHOULD and MAY.
+Space: A single byte with value 0x20 (ASCII space).
+String: Zero or more bytes. In CRN messages, a string is represented as:
+number_of_spaces + space + UTF-8 string + space
+Examples:
+"Hello" → 0 Hello
+"Hello World" → 1 Hello World
+" " → 2
+"" → 0
+Node name: A string beginning with "N:"
+Data name: A string beginning with "D:"
+2. Key/Value Pairs
+CRN stores key/value pairs. There are two types: address pairs and data pairs.
+Address key/value pairs:
+The key MUST be a node name.
+The value MUST be an IP address followed by ":" and a UDP port number.
+Example: ("N:test", "127.0.0.1:20110")
+Data key/value pairs:
+The key MUST be a data name.
+The value may be any string.
+Example: ("D:message", "Hello World!")
+In CRN message format:
+0 N:test 0 127.0.0.1:20110
+0 D:message 1 Hello World!
+3. HashIDs
+The hashID of a key/value pair is the SHA-256 hash of the key. HashIDs are encoded using 64
+hexadecimal characters.
+Example hashID:
+c22e1d650c0b6ff53d9f72bc5dbeb06e07dadba6dde7ae554fe5904cad31a518
+Distance between two hashIDs is defined as:
+256 minus the number of matching leading bits.
+Distance is symmetric. Distance to itself is zero. The triangle inequality holds.
+The distance between two nodes, or between a node and a key, is computed using their
+hashIDs.
+4. Nodes
+A node is a participant in the CRN. Each node:
+● MUST have a unique node name
+● MUST have a hashID equal to the SHA-256 hash of its node name
+No two nodes may share the same name.
+5. Storage
+Each node stores some key/value pairs. Storage rules depend on the key type.
+5.1 Address Key/Value Pairs
+A node MUST store its own address key/value pair.
+A node MUST store at most three address key/value pairs for each distance.
+If more than three exist at the same distance, the node MUST keep only three and SHOULD
+prefer stable nodes.
+Address pairs may be acquired through:
+1. Bootstrapping
+2. Direct write or compare-and-swap
+3. Relay
+4. Passive mapping (name request)
+5. Active mapping (nearest request)
+Nodes SHOULD advertise their address to increase connectivity.
+Nodes MUST remove address pairs for nodes that are not working or violate the
+protocol.
+5.2 Data
+Data key/value pairs are set or modified using write and compare-and-swap requests.
+Write requests MUST be sent to one of the three closest nodes to the key.
+Nodes SHOULD attempt to store on all three closest nodes.
+A node MUST reject a write if it knows three strictly closer nodes.
+If a node later discovers three strictly closer nodes, it MUST attempt to transfer the data and
+SHOULD delete its copy if successful.
+Read requests SHOULD be sent to the three closest nodes.
+6. Communication Between Nodes
+All communication occurs over UDP. One message per UDP packet. Recommended port range:
+20110–20130.
+There are three kinds of message:
+● Request
+● Response
+● Information
+Each request message type has a corresponding response message.
+Response messages MUST only be sent in reply to a request and MUST use the same
+transaction ID as the request.
+Information messages do not have corresponding responses.
+Messages begin with a two-byte transaction ID followed by a space. Transaction ID bytes MUST
+NOT be spaces.
+If no response is received within 5 seconds, a node MUST resend the request. A request MUST
+be resent at most three times. Resending MUST NOT block other processing.
+6.1 Name Messages
+Request: G
+Response: H + node name
+Upon receiving a name request, a node MUST respond with its node name.
+6.2 Nearest Messages
+Request: N + hashID
+Response: O + one to three closest address key/value pairs
+If fewer than three are stored, return all available.
+Nodes MUST NOT assume querying one node is sufficient to find the closest.
+6.3 Information Messages
+Type: I
+Used to communicate information to the user. Nodes MAY discard these messages.
+6.4 Relay Messages
+Type: V + node name + embedded message
+A node receiving a relay MUST forward the embedded message to the named node.
+If the embedded message is a request, the response MUST be returned to the original sender
+using the relay transaction ID.
+Relay handling MUST NOT prevent processing of other messages.
+6.5 Key/Value Requests
+Two conditions determine behaviour:
+A: Does the node store the requested key?
+B: Is the node one of the three closest nodes to the key?
+6.5.1 Key Existence (E/F)
+Response codes:
+A true → Y
+A false, B true → N
+A false, B false → ?
+6.5.2 Read (R/S)
+A true → Y + value
+A false, B true → N
+A false, B false → ?
+6.5.3 Write (W/X)
+A true → R (replace)
+A false, B true → A (add)
+A false, B false → X (reject)
+6.5.4 Compare-and-Swap (C/D)
+Request contains key, requested value, and new value.
+A true and value matches → R
+A true but value does not match → N
+A false, B true → A
+A false, B false → X
+Compare-and-swap MUST be atomic.

@@ -24,7 +24,7 @@ import java.util.ArrayList;
 class LocalTest {
     public static void main (String [] args) {
 	try {
-	    int numberOfNodes = 2;
+	    int numberOfNodes = 10;
 
 	    // If you want to test with more nodes,
 	    // set the number as a command line argument
@@ -106,7 +106,7 @@ class LocalTest {
 	    // Read them back to make sure the other node handled them correctly
 	    for (int i = 0; i < lines.size(); ++i) {
 		String key = "D:Juliet-" + i;
-		System.out.print("Trying to write " + key);
+		System.out.print("Trying to read " + key);
 		String value = nodes[0].read(key);
 		if (value == null) {
 		    System.out.println(" not found?");

@@ -1,0 +1,238 @@
+IN2011 Computer Networks: Coursework 1 (65%)
+Deadline: Monday May 1st 2026, 17:00
+This coursework assesses your ability to use what you have learnt about networking to
+build functioning software that interacts with network services. This includes the
+following:
+● Understanding the IP network layer and UDP transport layer.
+● Being able to read and understand the specification of an application layer
+protocol.
+● Using Java to implement the application layer protocol.
+● Use cryptographic hashes.
+Because this is a second year unit, we will assume that you have the following skills
+from the first year:
+● Can write Java programs that are hundreds of lines long.
+● Be able to test your software so that it is robust against a range of inputs and
+errors.
+● Be able to build and run your software on a variety of different operating systems
+and configurations.
+● Understand what a hash table and a stack are and how they are used.
+● Understand how a number or a string of bytes can be represented using
+hexadecimal.
+● Perform bit-wise comparisons on arrays of bytes.
+You will not get marks for these but you need to know them to do this coursework. If you
+do not feel confident about these please revise your notes from last year and talk to the
+staff running your practical sessions or your personal tutor.
+1. Tasks
+● Download the CRN RFC and read it carefully.
+● Download the starting Git repository, unzip it, and carefully read all of the code.
+● Complete Node.java and any other Java classes you wish to use so that your
+implementation:
+○ Provides all of the functionality described by NodeInterface.
+○ Correctly handles and responds to all incoming CRN messages.
+○ Fully implements the CRN protocol.
+1
+2. Submission Requirements
+You must submit a single ZIP file via Moodle.
+2.1. The ZIP file must contain ONLY
+● All .java source files required to build and run your solution
+● A plain text file named README.txt
+● A Wireshark capture file (.pcap or .pcapng)
+Do NOT include:
+● .class files
+● .jar files
+● IDE project folders
+● .git folders
+● Any compiled binaries
+2.2. Required ZIP Structure
+Your ZIP file must extract cleanly into a single directory containing:
+● Node.java
+● NodeInterface.java
+● <AnyAdditionalClass>.java
+● README.txt
+● capture.pcapng
+There must be:
+● No nested top-level folders
+● No package declarations in your Java files
+● No external library dependencies
+Your code must compile using: javac *.java and run using the standard entry class as
+provided in the starter code.
+*Failure to meet this structure may result in automated marking failure.
+2.3. README.txt Must Include
+● Clear build instructions
+2
+● Clear run instructions
+● Which functionality you believe is complete
+● Any known limitations
+2.4. Wireshark Recording Requirements
+You must include a Wireshark capture demonstrating:
+● Your node running on the Azure lab machine
+● Interaction with the provided test nodes
+● Evidence of the protocol functionality you claim is working
+● The capture must clearly show CRN message exchanges.
+Note: The Wireshark file is used as supporting evidence.
+3. Marking Scheme (total 65)
+Submissions will be marked out of a total of 65. Marks will be assessed by running a
+series of tests that use the classes you have written. These are similar to the test
+programs in the initial git repository but they cover a much wider range of tests and
+different network topologies and conditions. Marks are awarded proportionally. If a
+feature is partially correct, partial marks will be awarded.
+Marks will be awarded for the following:
+3.1. README.txt (2 marks)
+Did you submit a README.txt file with the correct contents?
+3.2. Wireshark Recording (3 marks)
+Does your recording show all of the functionality you claimed is working?
+Capture file present and readable – 1 mark
+Demonstrates interaction with lab nodes – 1 mark
+Clearly shows required CRN message exchanges – 1 mark
+3.3. Address Key/Value Pairs (5 marks)
+Assessed via automated multi-node tests.
+● Correct storage of own address – 1 mark
+● Enforces maximum three addresses per distance – 2 marks
+● Passive mapping (via Name request) – 1 mark
+3
+● Active mapping (via Nearest request) – 1 mark
+3.4. Data Key/Value Pairs (5 marks)
+● Correct write acceptance/rejection behaviour – 2 marks
+● Correct read behaviour (Y/N/?) – 2 marks
+● Correct data placement logic – 1 mark
+3.5. UDP Handling (15 marks)
+Assessed using automated packet impairment tests including loss, duplication and
+reordering. Marks are approximately distributed across:
+● Correct retransmission after 5 seconds – 4 marks
+● Maximum three retry limit enforced – 2 marks
+● Handles packet duplication – 3 marks
+● Handles packet reordering – 3 marks
+● Correct transaction ID matching under reordering – 3 marks
+3.6. Messages (15 marks)
+Marks are distributed per message type as follows:
+● Name (G/H) – 1 mark
+● Nearest (N/O) – 5 marks
+● Key Existence (E/F) – 2 marks
+● Read (R/S) – 2 marks
+● Write (W/X) – 2 marks
+● Compare-and-Swap (C/D) – 3 marks
+Marks are awarded based on:
+● Correct message formatting (including spacing)
+● Correct transaction ID handling
+● Correct response codes
+● Correct behaviour under edge-case tests
+3.7. Relay (10 marks)
+● Correct forwarding of embedded message – 3 marks
+● Correct rewriting of transaction ID – 3 marks
+● Correct return of response to original sender – 2 marks
+4
+● Non-blocking behaviour during relay processing – 2 marks
+Failure to rewrite transaction ID correctly may result in loss of up to 3 marks.
+3.8. Robustness (10 marks)
+Robustness is assessed through automated adversarial tests including malformed
+messages and invalid inputs. Marks are awarded for:
+● Handling malformed messages without crashing – 3 marks
+● Handling unknown message types safely – 2 marks
+● Maintaining protocol invariants under invalid inputs – 3 marks
+● Avoiding infinite loops or resource exhaustion – 2 marks
+4. Academic Conduct
+● This is individual coursework. The code that you submit must be entirely your
+own work.
+● You must not use generative AI tools.
+● You must not share your code with other students.
+● You must not make your code available to other students. This includes making it
+a publicly accessible GitHub repository, posting it to Discord or sharing it on your
+WhatsApp group.
+● When using the test network, your program may send or receive CRN messages
+from another student’s program. This is acceptable as a form of testing.
+If you don’t follow these rules it will be treated as academic misconduct and may result
+in a range of sanctions.
+***This is the end of the Coursework 1 specification. Below, I have added detailed
+hints and instructions to help you implement and debug your code successfully.
+5. Hints and Implementation Guidance
+● Start early — CRN is strict about formatting and behaviour.
+● Read the RFC carefully before coding.
+● Do not leave reliability and relay until last week.
+5.1. Recommended Implementation Order
+1. SHA-256 hashing
+5
+2. Distance calculation
+3. String encoding/decoding
+4. Name (G/H)
+5. Nearest (N/O)
+6. Key existence (E/F)
+7. Read (R/S)
+8. Write (W/X)
+9. UDP reliability (timeouts, retries)
+10. Relay (V)
+11. Compare-and-swap (C/D)
+12. Rebalancing rules
+5.2. Testing Advice
+● Test against lab network nodes.
+● Also run multiple local Node instances for faster iteration.
+● Use netcat to manually send UDP messages to understand protocol behaviour.
+● Use sha256sum on lab machines to verify hash correctness.
+○ Be careful with trailing newline characters.
+● Simulate packet loss by randomly discarding packets (use fixed seed for
+repeatability).
+● Use Wireshark to confirm:
+○ Messages are actually sent.
+○ Transaction IDs match.
+○ Retransmissions occur after ~5 seconds.
+○ Responses go to the correct port.
+5.3. Common Mistakes
+Message Formatting
+● Missing final trailing space.
+● Incorrect CRN string encoding.
+● Off-by-one parsing errors.
+● Mishandling empty strings.
+● Assuming values contain no spaces.
+Transaction IDs
+● Including spaces in txid.
+● Generating duplicate txids.
+● Not copying requests into response.
+● Assuming responses arrive in order.
+6
+Hashing & Distance
+● Hashing wrong input.
+● Incorrect hex formatting.
+● Comparing hex characters instead of bits.
+● Using incorrect distance formula.
+Storage Rules
+● Ignoring the “3 per distance” rule.
+● Accepting writes when three strictly closer nodes exist.
+● Failing to rebalance data.
+● Not removing broken nodes.
+Relay
+● Forwarding request but not returning response.
+● Using wrong transaction ID in relay response.
+● Blocking while processing relay.
+Compare-and-Swap
+● Not atomic.
+● Swapping requested/new values.
+● Returning incorrect response codes.
+● Modifying value when compare fails.
+5.4. Debugging Strategy
+● Log every received and sent message.
+● Make spaces visible when debugging formatting issues.
+● Test pure functions separately:
+○ String encode/decode.
+○ SHA-256.
+○ Distance calculation.
+● Reduce complexity if stuck, disable advanced features and reintroduce gradually.
+● If the tester reports “no response”:
+○ Check you sent one.
+○ Check the correct port/address.
+○ Check exact formatting.
+5.5. Conceptual Reminder
+● CRN is peer-to-peer.
+● There are no servers and clients.
+7
+● Every node can send requests, receive requests, store data, and relay
+messages.
+5.6. Final Pre-Submission Checks
+● Name exchange works.
+● Nearest returns correct nodes.
+● Writes obey storage rules.
+● Reads return correct codes.
+● Retransmissions work.
+● Relay works correctly.
+● CAS is atomic.
+● No crashes on malformed input.
+● Wireshark clearly shows required behaviour.
+8
