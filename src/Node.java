@@ -222,33 +222,37 @@ public class Node implements NodeInterface {
         drainIncoming();
         List<String[]> closest = findClosestNodes(key);
         for (String[] node : closest) {
-            String txID = generateTxID();
             String[] addrParts = node[1].split(":");
             InetAddress addr = InetAddress.getByName(addrParts[0]);
             int port = Integer.parseInt(addrParts[1]);
-            sendMessage(addr, port, txID + " R " + encodeString(key));
-            long deadline = System.currentTimeMillis() + 5000;
-            while (System.currentTimeMillis() < deadline) {
-                socket.setSoTimeout(500);
-                try {
-                    byte[] buffer = new byte[1024];
-                    DatagramPacket pkt = new DatagramPacket(buffer, buffer.length);
-                    socket.receive(pkt);
-                    String msg = new String(pkt.getData(), 0, pkt.getLength());
-                    String[] parts = msg.split(" ", 3);
-                    dispatchMessage(parts[0], parts[1], parts.length > 2 ? parts[2] : "", pkt);
-                } catch (SocketTimeoutException e) { /* continue */ }
-                String response = pendingResponses.remove(txID);
-                if (response != null) {
-                    char code = response.charAt(0);
-                    // response body is "Y<encoded value>" so skip the Y to decode the value
-                    if (code == 'Y') {
-                        int start = 1;
-                        while (start < response.length() && response.charAt(start) == ' ') start++;
-                        return decodeString(response.substring(start))[0];
+            // retry up to 3 times per node to handle packet loss
+            for (int attempt = 0; attempt < 3; attempt++) {
+                String txID = generateTxID();
+                sendMessage(addr, port, txID + " R " + encodeString(key));
+                long deadline = System.currentTimeMillis() + 2000;
+                while (System.currentTimeMillis() < deadline) {
+                    socket.setSoTimeout(500);
+                    try {
+                        byte[] buffer = new byte[1024];
+                        DatagramPacket pkt = new DatagramPacket(buffer, buffer.length);
+                        socket.receive(pkt);
+                        String msg = new String(pkt.getData(), 0, pkt.getLength());
+                        String[] parts = msg.split(" ", 3);
+                        dispatchMessage(parts[0], parts[1], parts.length > 2 ? parts[2] : "", pkt);
+                    } catch (SocketTimeoutException e) { /* continue */ }
+                    String response = pendingResponses.remove(txID);
+                    if (response != null) {
+                        char code = response.charAt(0);
+                        // response body is "Y<encoded value>" so skip the Y to decode the value
+                        if (code == 'Y') {
+                            int start = 1;
+                            while (start < response.length() && response.charAt(start) == ' ') start++;
+                            return decodeString(response.substring(start))[0];
+                        }
+                        if (code == 'N') return null;
+                        // '?' means not one of 3 closest, try next node
+                        break;
                     }
-                    if (code == 'N') return null;
-                    // '?' means not one of 3 closest, try next node
                 }
             }
         }
@@ -475,21 +479,24 @@ public class Node implements NodeInterface {
     }
 
     private HashMap<String, String> sendNearest(InetAddress addr, int port, String hashIDHex) throws Exception {
-        String txID = generateTxID();
-        sendMessage(addr, port, txID + " N " + hashIDHex);
-        long deadline = System.currentTimeMillis() + 5000;
-        while (System.currentTimeMillis() < deadline) {
-            socket.setSoTimeout(500);
-            try {
-                byte[] buffer = new byte[1024];
-                DatagramPacket pkt = new DatagramPacket(buffer, buffer.length);
-                socket.receive(pkt);
-                String msg = new String(pkt.getData(), 0, pkt.getLength());
-                String[] parts = msg.split(" ", 3);
-                dispatchMessage(parts[0], parts[1], parts.length > 2 ? parts[2] : "", pkt);
-            } catch (SocketTimeoutException e) { /* continue */ }
-            String response = pendingResponses.remove(txID);
-            if (response != null) return parseAddressPairs(response);
+        // retry up to 3 times to handle packet loss on the real network
+        for (int attempt = 0; attempt < 3; attempt++) {
+            String txID = generateTxID();
+            sendMessage(addr, port, txID + " N " + hashIDHex);
+            long deadline = System.currentTimeMillis() + 2000;
+            while (System.currentTimeMillis() < deadline) {
+                socket.setSoTimeout(500);
+                try {
+                    byte[] buffer = new byte[1024];
+                    DatagramPacket pkt = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(pkt);
+                    String msg = new String(pkt.getData(), 0, pkt.getLength());
+                    String[] parts = msg.split(" ", 3);
+                    dispatchMessage(parts[0], parts[1], parts.length > 2 ? parts[2] : "", pkt);
+                } catch (SocketTimeoutException e) { /* continue */ }
+                String response = pendingResponses.remove(txID);
+                if (response != null) return parseAddressPairs(response);
+            }
         }
         return new HashMap<>();
     }
