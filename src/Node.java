@@ -242,7 +242,11 @@ public class Node implements NodeInterface {
                 if (response != null) {
                     char code = response.charAt(0);
                     // response body is "Y<encoded value>" so skip the Y to decode the value
-                    if (code == 'Y') return decodeString(response.substring(1))[0];
+                    if (code == 'Y') {
+                        int start = 1;
+                        while (start < response.length() && response.charAt(start) == ' ') start++;
+                        return decodeString(response.substring(start))[0];
+                    }
                     if (code == 'N') return null;
                     // '?' means not one of 3 closest, try next node
                 }
