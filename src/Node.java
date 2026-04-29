@@ -265,29 +265,67 @@ public class Node implements NodeInterface {
         boolean anySuccess = false;
         // try to write to all 3 closest nodes as the RFC says we should
         for (String[] node : closest) {
-            String txID = generateTxID();
             String[] addrParts = node[1].split(":");
             InetAddress addr = InetAddress.getByName(addrParts[0]);
             int port = Integer.parseInt(addrParts[1]);
-            sendMessage(addr, port, txID + " W " + encodeString(key) + encodeString(value));
-            long deadline = System.currentTimeMillis() + 5000;
-            while (System.currentTimeMillis() < deadline) {
-                socket.setSoTimeout(500);
-                try {
-                    byte[] buffer = new byte[1024];
-                    DatagramPacket pkt = new DatagramPacket(buffer, buffer.length);
-                    socket.receive(pkt);
-                    String msg = new String(pkt.getData(), 0, pkt.getLength());
-                    String[] parts = msg.split(" ", 3);
-                    dispatchMessage(parts[0], parts[1], parts.length > 2 ? parts[2] : "", pkt);
-                } catch (SocketTimeoutException e) { /* continue */ }
-                String response = pendingResponses.remove(txID);
-                if (response != null) {
-                    char code = response.charAt(0);
-                    // R = replaced existing, A = added new - both count as success
-                    if (code == 'R' || code == 'A') anySuccess = true;
-                    break;
+            // retry up to 3 times per node to handle packet loss
+            for (int attempt = 0; attempt < 3; attempt++) {
+                String txID = generateTxID();
+                sendMessage(addr, port, txID + " W " + encodeString(key) + encodeString(value));
+                long deadline = System.currentTimeMillis() + 2000;
+                boolean gotResponse = false;
+                while (System.currentTimeMillis() < deadline) {
+                    socket.setSoTimeout(500);
+                    try {
+                        byte[] buffer = new byte[1024];
+                        DatagramPacket pkt = new DatagramPacket(buffer, buffer.length);
+                        socket.receive(pkt);
+                        String msg = new String(pkt.getData(), 0, pkt.getLength());
+                        String[] parts = msg.split(" ", 3);
+                        dispatchMessage(parts[0], parts[1], parts.length > 2 ? parts[2] : "", pkt);
+                    } catch (SocketTimeoutException e) { /* continue */ }
+                    String response = pendingResponses.remove(txID);
+                    if (response != null) {
+                        char code = response.charAt(0);
+                        // R = replaced existing, A = added new - both count as success
+                        // X means the node thinks it isn't one of the 3 closest - try next node
+                        if (code == 'R' || code == 'A') anySuccess = true;
+                        gotResponse = true;
+                        break;
+                    }
                 }
+                if (gotResponse) break; // got a response (even X), no need to retry this node
+            }
+        }
+        // if all 3 closest nodes rejected with X, fall back and store on the closest one anyway
+        // this handles the case where the network view is incomplete
+        if (!anySuccess && !closest.isEmpty()) {
+            String[] node = closest.get(0);
+            String[] addrParts = node[1].split(":");
+            InetAddress addr = InetAddress.getByName(addrParts[0]);
+            int port = Integer.parseInt(addrParts[1]);
+            for (int attempt = 0; attempt < 3; attempt++) {
+                String txID = generateTxID();
+                sendMessage(addr, port, txID + " W " + encodeString(key) + encodeString(value));
+                long deadline = System.currentTimeMillis() + 2000;
+                while (System.currentTimeMillis() < deadline) {
+                    socket.setSoTimeout(500);
+                    try {
+                        byte[] buffer = new byte[1024];
+                        DatagramPacket pkt = new DatagramPacket(buffer, buffer.length);
+                        socket.receive(pkt);
+                        String msg = new String(pkt.getData(), 0, pkt.getLength());
+                        String[] parts = msg.split(" ", 3);
+                        dispatchMessage(parts[0], parts[1], parts.length > 2 ? parts[2] : "", pkt);
+                    } catch (SocketTimeoutException e) { /* continue */ }
+                    String response = pendingResponses.remove(txID);
+                    if (response != null) {
+                        char code = response.charAt(0);
+                        if (code == 'R' || code == 'A') { anySuccess = true; }
+                        break;
+                    }
+                }
+                if (anySuccess) break;
             }
         }
         return anySuccess;
