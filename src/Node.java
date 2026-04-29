@@ -300,6 +300,7 @@ public class Node implements NodeInterface {
         // if all 3 closest nodes rejected with X, fall back and store on the closest one anyway
         // this handles the case where the network view is incomplete
         if (!anySuccess && !closest.isEmpty()) {
+            System.out.println("no closest node")
             String[] node = closest.get(0);
             String[] addrParts = node[1].split(":");
             InetAddress addr = InetAddress.getByName(addrParts[0]);
