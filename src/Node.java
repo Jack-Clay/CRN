@@ -220,6 +220,8 @@ public class Node implements NodeInterface {
     
     public String read(String key) throws Exception {
         drainIncoming();
+        // check local storage first before going to the network
+        if (dataStore.containsKey(key)) return dataStore.get(key);
         List<String[]> closest = findClosestNodes(key);
         for (String[] node : closest) {
             String[] addrParts = node[1].split(":");
@@ -322,7 +324,11 @@ public class Node implements NodeInterface {
                     String response = pendingResponses.remove(txID);
                     if (response != null) {
                         char code = response.charAt(0);
-                        if (code == 'R' || code == 'A') { anySuccess = true; }
+                        if (code == 'R' || code == 'A') {
+                            anySuccess = true;
+                            // store locally so we can serve read-backs ourselves
+                            dataStore.put(key, value);
+                        }
                         break;
                     }
                 }
