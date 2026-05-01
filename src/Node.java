@@ -98,6 +98,8 @@ public class Node implements NodeInterface {
     // when we send a request we store the response here keyed by txID so we can find it
     private HashMap<String, String> pendingResponses = new HashMap<>();
     private Random random = new Random();
+    // ordered list of relay nodes - index 0 is the first (base) relay
+    private List<String> relayStack = new ArrayList<>();
 
     public void setNodeName(String nodeName) throws Exception {
         this.nodeName = nodeName;
@@ -178,11 +180,13 @@ public class Node implements NodeInterface {
     }
     
     public void pushRelay(String nodeName) throws Exception {
-	throw new Exception("Not implemented");
+        relayStack.add(nodeName); // add to end = top of stack
     }
 
     public void popRelay() throws Exception {
-        throw new Exception("Not implemented");
+        if (!relayStack.isEmpty()) {
+            relayStack.remove(relayStack.size() - 1);
+        }
     }
 
     public boolean exists(String key) throws Exception {
@@ -339,7 +343,65 @@ public class Node implements NodeInterface {
     }
 
     public boolean CAS(String key, String currentValue, String newValue) throws Exception {
-	throw new Exception("Not implemented");
+        drainIncoming();
+        List<String[]> closest = findClosestNodes(key);
+        for (String[] node : closest) {
+            String[] addrParts = node[1].split(":");
+            InetAddress addr = InetAddress.getByName(addrParts[0]);
+            int port = Integer.parseInt(addrParts[1]);
+            // retry up to 3 times per node to handle packet loss
+            for (int attempt = 0; attempt < 3; attempt++) {
+                String txID = generateTxID();
+                sendMessage(addr, port, txID + " C " + encodeString(key) + encodeString(currentValue) + encodeString(newValue));
+                long deadline = System.currentTimeMillis() + 2000;
+                boolean gotResponse = false;
+                while (System.currentTimeMillis() < deadline) {
+                    socket.setSoTimeout(500);
+                    try {
+                        byte[] buffer = new byte[1024];
+                        DatagramPacket pkt = new DatagramPacket(buffer, buffer.length);
+                        socket.receive(pkt);
+                        String msg = new String(pkt.getData(), 0, pkt.getLength());
+                        String[] parts = msg.split(" ", 3);
+                        dispatchMessage(parts[0], parts[1], parts.length > 2 ? parts[2] : "", pkt);
+                    } catch (SocketTimeoutException e) { /* continue */ }
+                    String response = pendingResponses.remove(txID);
+                    if (response != null) {
+                        char code = response.charAt(0);
+                        // Y = swapped, N = value didn't match (definitive failure), ? = not closest try next
+                        if (code == 'Y') return true;
+                        if (code == 'N') return false;
+                        // '?' means not one of 3 closest, try next node
+                        gotResponse = true;
+                        break;
+                    }
+                }
+                if (gotResponse) break;
+            }
+        }
+        return false;
+    }
+
+    private void handleCAS(String txID, String body, DatagramPacket packet) throws Exception {
+        String[] keyParsed = decodeString(body);
+        String key = keyParsed[0];
+        String[] currentParsed = decodeString(keyParsed[1]);
+        String currentValue = currentParsed[0];
+        String newValue = decodeString(currentParsed[1])[0];
+        boolean isClosest = isAmongThreeClosest(key);
+        String code;
+        if (!isClosest) {
+            // not one of the 3 closest - tell caller to try someone else
+            code = "?";
+        } else if (dataStore.containsKey(key) && dataStore.get(key).equals(currentValue)) {
+            // current value matches - do the swap
+            dataStore.put(key, newValue);
+            code = "Y";
+        } else {
+            // current value didn't match - swap fails
+            code = "N";
+        }
+        sendMessage(packet.getAddress(), packet.getPort(), txID + " D " + code);
     }
 
     // transaction IDs are 2 bytes - the RFC says they must not be spaces
@@ -354,9 +416,42 @@ public class Node implements NodeInterface {
     }
 
     private void sendMessage(InetAddress address, int port, String message) throws Exception {
+        if (!relayStack.isEmpty()) {
+            // build the V-wrapped chain: us → relay[0] → relay[1] → ... → target
+            // txID from the original message reused for all V wrappers
+            String txID = message.split(" ")[0];
+            String currentMsg = message;
+            String currentAddr = address.getHostAddress() + ":" + port;
+            // wrap from top of stack downward (last relay first, closest to target)
+            for (int i = relayStack.size() - 1; i >= 0; i--) {
+                String relayAddr = dataStore.get(relayStack.get(i));
+                if (relayAddr == null) throw new Exception("Relay address unknown: " + relayStack.get(i));
+                currentMsg = txID + " V " + encodeString(currentAddr) + currentMsg;
+                currentAddr = relayAddr;
+            }
+            String[] parts = currentAddr.split(":");
+            InetAddress relayInet = InetAddress.getByName(parts[0]);
+            int relayPort = Integer.parseInt(parts[1]);
+            byte[] data = currentMsg.getBytes(StandardCharsets.UTF_8);
+            socket.send(new DatagramPacket(data, data.length, relayInet, relayPort));
+            return;
+        }
         byte[] data = message.getBytes(StandardCharsets.UTF_8);
         DatagramPacket pkt = new DatagramPacket(data, data.length, address, port);
         socket.send(pkt);
+    }
+
+    private void handleRelay(String txID, String body, DatagramPacket packet) throws Exception {
+        // extract the target address (first encoded string) and forward the rest to it
+        String[] parsed = decodeString(body);
+        String targetAddr = parsed[0];
+        String innerMessage = parsed[1];
+        String[] addrParts = targetAddr.split(":");
+        InetAddress targetInet = InetAddress.getByName(addrParts[0]);
+        int targetPort = Integer.parseInt(addrParts[1]);
+        // send raw bytes directly - bypass our relay stack to avoid loops
+        byte[] data = innerMessage.getBytes(StandardCharsets.UTF_8);
+        socket.send(new DatagramPacket(data, data.length, targetInet, targetPort));
     }
 
     private void handleName(String txID, DatagramPacket packet) throws Exception {
@@ -377,6 +472,9 @@ public class Node implements NodeInterface {
             case "S": pendingResponses.put(txID, body); break; // read response
             case "W": handleWrite(txID, body, packet); break;  // write request
             case "X": pendingResponses.put(txID, body); break; // write response
+            case "C": handleCAS(txID, body, packet); break;    // CAS request
+            case "D": pendingResponses.put(txID, body); break; // CAS response
+            case "V": handleRelay(txID, body, packet); break;  // relay request
         }
     }
 
