@@ -235,7 +235,7 @@ public class Node implements NodeInterface {
             for (int attempt = 0; attempt < 3; attempt++) {
                 String txID = generateTxID();
                 sendMessage(addr, port, txID + " R " + encodeString(key));
-                long deadline = System.currentTimeMillis() + 2000;
+                long deadline = System.currentTimeMillis() + 4000;
                 while (System.currentTimeMillis() < deadline) {
                     socket.setSoTimeout(500);
                     try {
