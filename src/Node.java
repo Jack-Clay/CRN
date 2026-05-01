@@ -306,7 +306,6 @@ public class Node implements NodeInterface {
         // if all 3 closest nodes rejected with X, fall back and store on the closest one anyway
         // this handles the case where the network view is incomplete
         if (!anySuccess && !closest.isEmpty()) {
-            System.out.println("no closest node");
             String[] node = closest.get(0);
             String[] addrParts = node[1].split(":");
             InetAddress addr = InetAddress.getByName(addrParts[0]);
@@ -401,7 +400,7 @@ public class Node implements NodeInterface {
             // current value didn't match - swap fails
             code = "N";
         }
-        sendMessage(packet.getAddress(), packet.getPort(), txID + " D " + code);
+        sendDirect(packet.getAddress(), packet.getPort(), txID + " D " + code);
     }
 
     // transaction IDs are 2 bytes - the RFC says they must not be spaces
@@ -413,6 +412,12 @@ public class Node implements NodeInterface {
             id[i] = (byte) b;
         }
         return new String(id, StandardCharsets.ISO_8859_1);
+    }
+
+    private void sendDirect(InetAddress address, int port, String message) throws Exception {
+        byte[] data = message.getBytes(StandardCharsets.UTF_8);
+        DatagramPacket pkt = new DatagramPacket(data, data.length, address, port);
+        socket.send(pkt);
     }
 
     private void sendMessage(InetAddress address, int port, String message) throws Exception {
@@ -456,7 +461,7 @@ public class Node implements NodeInterface {
 
     private void handleName(String txID, DatagramPacket packet) throws Exception {
         String response = txID + " H " + encodeString(nodeName);
-        sendMessage(packet.getAddress(), packet.getPort(), response);
+        sendDirect(packet.getAddress(), packet.getPort(), response);
     }
 
     // routes an incoming message to the right handler based on the type byte
@@ -522,7 +527,7 @@ public class Node implements NodeInterface {
         if (hasKey) response = txID + " S Y" + encodeString(dataStore.get(key));
         else if (isClosest) response = txID + " S N";
         else response = txID + " S ?";
-        sendMessage(packet.getAddress(), packet.getPort(), response);
+        sendDirect(packet.getAddress(), packet.getPort(), response);
     }
 
     private void handleWrite(String txID, String body, DatagramPacket packet) throws Exception {
@@ -541,7 +546,7 @@ public class Node implements NodeInterface {
         } else {
             code = "X";
         }
-        sendMessage(packet.getAddress(), packet.getPort(), txID + " X " + code);
+        sendDirect(packet.getAddress(), packet.getPort(), txID + " X " + code);
     }
 
     private void handleExists(String txID, String body, DatagramPacket packet) throws Exception {
@@ -552,7 +557,7 @@ public class Node implements NodeInterface {
         if (hasKey) code = "Y";
         else if (isClosest) code = "N";
         else code = "?";
-        sendMessage(packet.getAddress(), packet.getPort(), txID + " F " + code);
+        sendDirect(packet.getAddress(), packet.getPort(), txID + " F " + code);
     }
 
     private static String bytesToHex(byte[] bytes) {
@@ -582,7 +587,7 @@ public class Node implements NodeInterface {
             response.append(encodeString(pair[0]));
             response.append(encodeString(pair[1]));
         }
-        sendMessage(packet.getAddress(), packet.getPort(), response.toString());
+        sendDirect(packet.getAddress(), packet.getPort(), response.toString());
     }
 
     // parse the body of an O response - it's a sequence of name/address pairs encoded as CRN strings
